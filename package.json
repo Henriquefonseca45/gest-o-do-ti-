@@ -76,7 +76,7 @@
         "tinymce": "^8.10.1",
         "tinymce-i18n": "^26.11.2",
         "vue": "^3.5.44",
-        "wunderbaum": "^0.14.1"
+        "wunderbaum": "^0.15.0"
     },
     "scripts": {
         "audit": "npm audit package-lock-only",
