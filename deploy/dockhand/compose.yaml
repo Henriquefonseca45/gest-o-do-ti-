@@ -1,0 +1,54 @@
+name: glpi
+
+services:
+  glpi:
+    image: glpi/glpi:${GLPI_VERSION:-12.0}
+    restart: unless-stopped
+    ports:
+      - "${GLPI_HTTP_PORT:-8080}:80"
+    environment:
+      GLPI_DB_HOST: db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: ${GLPI_DB_NAME:-glpi}
+      GLPI_DB_USER: ${GLPI_DB_USER:-glpi}
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD:?Defina GLPI_DB_PASSWORD no Dockhand}
+      GLPI_CRONTAB_ENABLED: "1"
+      GLPI_SKIP_AUTOINSTALL: "false"
+      GLPI_SKIP_AUTOUPDATE: "false"
+    volumes:
+      - glpi_data:/var/glpi
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+  db:
+    image: mariadb:${MARIADB_VERSION:-11.8}
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Defina MARIADB_ROOT_PASSWORD no Dockhand}
+      MARIADB_DATABASE: ${GLPI_DB_NAME:-glpi}
+      MARIADB_USER: ${GLPI_DB_USER:-glpi}
+      MARIADB_PASSWORD: ${GLPI_DB_PASSWORD:?Defina GLPI_DB_PASSWORD no Dockhand}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mariadb-admin ping -h 127.0.0.1 -u root -p"$$MARIADB_ROOT_PASSWORD" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  glpi_data:
+  db_data:

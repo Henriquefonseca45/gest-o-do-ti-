@@ -1,0 +1,72 @@
+{
+    "common": {
+        "name": "Characteristics"
+    },
+    "2": {
+        "name": "ID",
+        "table": "glpi_computers_softwareversions",
+        "field": "id",
+        "datatype": "number",
+        "nosearch": false,
+        "nodisplay": false,
+        "available_searchtypes": [
+            "contains",
+            "notcontains",
+            "morethan",
+            "lessthan",
+            "morethanorequal",
+            "lessthanorequal",
+            "empty"
+        ],
+        "uid": "Computer_SoftwareVersion.id"
+    },
+    "3": {
+        "name": "Computer",
+        "table": "glpi_computers",
+        "field": "name",
+        "datatype": "dropdown",
+        "nosearch": false,
+        "nodisplay": false,
+        "available_searchtypes": [
+            "contains",
+            "notcontains",
+            "equals",
+            "notequals"
+        ],
+        "uid": "Computer_SoftwareVersion.Computer.name"
+    },
+    "4": {
+        "name": "Version",
+        "table": "glpi_softwareversions",
+        "field": "name",
+        "datatype": "dropdown",
+        "nosearch": false,
+        "nodisplay": false,
+        "available_searchtypes": [
+            "contains",
+            "notcontains",
+            "equals",
+            "notequals",
+            "empty"
+        ],
+        "uid": "Computer_SoftwareVersion.SoftwareVersion.name"
+    },
+    "6": {
+        "name": "Installation date",
+        "table": "glpi_computers_softwareversions",
+        "field": "date_install",
+        "datatype": "date",
+        "nosearch": false,
+        "nodisplay": false,
+        "available_searchtypes": [
+            "equals",
+            "notequals",
+            "lessthan",
+            "morethan",
+            "contains",
+            "notcontains",
+            "empty"
+        ],
+        "uid": "Computer_SoftwareVersion.date_install"
+    }
+}

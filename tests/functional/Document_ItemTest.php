@@ -1,0 +1,1051 @@
+<?php
+
+/**
+ * ---------------------------------------------------------------------
+ *
+ * GLPI - Gestionnaire Libre de Parc Informatique
+ *
+ * http://glpi-project.org
+ *
+ * @copyright 2015-2026 Teclib' and contributors.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * ---------------------------------------------------------------------
+ *
+ * LICENSE
+ *
+ * This file is part of GLPI.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * ---------------------------------------------------------------------
+ */
+
+namespace tests\units;
+
+use Document_Item;
+use Glpi\Asset\Capacity;
+use Glpi\Asset\Capacity\HasDocumentsCapacity;
+use Glpi\Features\Clonable;
+use Glpi\Tests\DbTestCase;
+use Psr\Log\LogLevel;
+use Toolbox;
+
+class Document_ItemTest extends DbTestCase
+{
+    public function testRelatedItemHasTab()
+    {
+        global $CFG_GLPI;
+
+        $this->initAssetDefinition(capacities: [new Capacity(name: HasDocumentsCapacity::class)]);
+
+        $this->login(); // tab will be available only if corresponding right is available in the current session
+
+        foreach ($CFG_GLPI['itemdevices_types'] as $itemtype) {
+            $item = $this->createItem(
+                $itemtype,
+                $this->getMinimalCreationInput($itemtype)
+            );
+
+            $tabs = $item->defineAllTabs();
+            $this->assertArrayHasKey('Document_Item$1', $tabs, $itemtype);
+        }
+    }
+
+    public function testRelatedItemCloneRelations()
+    {
+        global $CFG_GLPI;
+
+        $this->initAssetDefinition(capacities: [new Capacity(name: HasDocumentsCapacity::class)]);
+
+        foreach ($CFG_GLPI['itemdevices_types'] as $itemtype) {
+            if (!Toolbox::hasTrait($itemtype, Clonable::class)) {
+                continue;
+            }
+
+            $item = \getItemForItemtype($itemtype);
+            $this->assertContains(Document_Item::class, $item->getCloneRelations(), $itemtype);
+        }
+    }
+
+    public function testGetForbiddenStandardMassiveAction()
+    {
+        $ditem = new Document_Item();
+        $this->assertSame(
+            ['clone', 'update'],
+            $ditem->getForbiddenStandardMassiveAction()
+        );
+    }
+
+    public function testPrepareInputForAdd()
+    {
+        $input = [];
+        $ditem = new Document_Item();
+
+        $res = $ditem->add($input);
+        $this->assertFalse($res);
+        $this->hasPhpLogRecordThatContains(
+            'Item type is mandatory',
+            LogLevel::WARNING
+        );
+
+        $input['itemtype'] = '';
+        $res = $ditem->add($input);
+        $this->assertFalse($res);
+        $this->hasPhpLogRecordThatContains(
+            'Item type is mandatory',
+            LogLevel::WARNING
+        );
+
+        $input['itemtype'] = 'NotAClass';
+        $res = $ditem->add($input);
+        $this->assertFalse($res);
+        $this->hasPhpLogRecordThatContains(
+            'No class found for type NotAClass',
+            LogLevel::WARNING
+        );
+
+        $input['itemtype'] = 'Computer';
+        $res = $ditem->add($input);
+        $this->assertFalse($res);
+        $this->hasPhpLogRecordThatContains(
+            'Item ID is mandatory',
+            LogLevel::WARNING
+        );
+
+        $input['items_id'] = 0;
+        $res = $ditem->add($input);
+        $this->assertFalse($res);
+        $this->hasPhpLogRecordThatContains(
+            'Item ID is mandatory',
+            LogLevel::WARNING
+        );
+
+        $cid = getItemByTypeName('Computer', '_test_pc01', true);
+        $input['items_id'] = $cid;
+
+        $res = $ditem->add($input);
+        $this->assertFalse($res);
+        $this->hasPhpLogRecordThatContains(
+            'Document ID is mandatory',
+            LogLevel::WARNING
+        );
+
+        $input['documents_id'] = 0;
+        $res = $ditem->add($input);
+        $this->assertFalse($res);
+        $this->hasPhpLogRecordThatContains(
+            'Document ID is mandatory',
+            LogLevel::WARNING
+        );
+
+        $document = new \Document();
+        $this->assertGreaterThan(
+            0,
+            $document->add([
+                'name'   => 'Test document to link',
+            ])
+        );
+        $input['documents_id'] = $document->getID();
+
+        $expected = [
+            'itemtype'     => 'Computer',
+            'items_id'     => $cid,
+            'documents_id' => $document->getID(),
+            'users_id'     => false,
+            'entities_id'  => 0,
+            'is_recursive' => 0,
+        ];
+
+        $this->assertSame(
+            $expected,
+            $ditem->prepareInputForAdd($input)
+        );
+    }
+
+
+    public function testGetDistinctTypesParams()
+    {
+        $expected = [
+            'SELECT'          => 'itemtype',
+            'DISTINCT'        => true,
+            'FROM'            => 'glpi_documents_items',
+            'WHERE'           => [
+                'OR'  => [
+                    'glpi_documents_items.documents_id'  => 1,
+                    [
+                        'glpi_documents_items.itemtype'  => 'Document',
+                        'glpi_documents_items.items_id'  => 1,
+                    ],
+                ],
+            ],
+            'ORDER'           => 'itemtype',
+        ];
+        $this->assertSame($expected, Document_Item::getDistinctTypesParams(1));
+
+        $extra_where = ['date_mod' => ['>', '2000-01-01']];
+        $expected = [
+            'SELECT'          => 'itemtype',
+            'DISTINCT'        => true,
+            'FROM'            => 'glpi_documents_items',
+            'WHERE'           => [
+                'OR'  => [
+                    'glpi_documents_items.documents_id'  => 1,
+                    [
+                        'glpi_documents_items.itemtype'  => 'Document',
+                        'glpi_documents_items.items_id'  => 1,
+                    ],
+                ],
+                [
+                    'date_mod'  => [
+                        '>',
+                        '2000-01-01',
+                    ],
+                ],
+            ],
+            'ORDER'           => 'itemtype',
+        ];
+        $this->assertSame($expected, Document_Item::getDistinctTypesParams(1, $extra_where));
+    }
+
+
+    public function testPostAddItem()
+    {
+        $uid = getItemByTypeName('User', TU_USER, true);
+
+        $ticket = new \Ticket();
+        $tickets_id = $this->createItem(
+            \Ticket::class,
+            [
+                'name' => 'Test modification date not updated from Document_Item',
+                'content' => 'Test modification date not updated from Document_Item',
+                'date_mod' => '2020-01-01 00:00:00',
+            ],
+        )->getID();
+
+        // Document and Document_Item
+        $doc_id = $this->createItem(
+            \Document::class,
+            [
+                'users_id'     => $uid,
+                'tickets_id'   => $tickets_id,
+                'name'         => 'A simple document object',
+            ],
+        )->getID();
+
+        // Link the document to the ticket via Document_Item
+        $this->createItem(
+            Document_Item::class,
+            [
+                'users_id'      => $uid,
+                'items_id'      => $tickets_id,
+                'itemtype'      => \Ticket::class,
+                'documents_id'  => $doc_id,
+            ],
+        );
+
+        $this->assertTrue($ticket->getFromDB($tickets_id));
+        $this->assertGreaterThan('2020-01-01 00:00:00', $ticket->fields['date_mod']);
+        $this->assertEquals(
+            $_SESSION["glpi_currenttime"],
+            $ticket->fields['date_mod'],
+        );
+    }
+
+    /**
+     * Test that private documents are hidden from users without SEEPRIVATE right.
+     */
+    public function testPrivateDocumentVisibilityWithoutSeeprivateRight()
+    {
+        $this->login();
+
+        // Create a ticket
+        $tickets_id = $this->createItem(
+            \Ticket::class,
+            [
+                'name' => 'Test private document visibility',
+                'content' => 'Test content',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        )->getID();
+
+        // Create a document
+        $doc_id = $this->createItem(
+            \Document::class,
+            [
+                'name' => 'Private test document',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        )->getID();
+
+        // Attach document to ticket as private
+        $doc_item = $this->createItem(
+            Document_Item::class,
+            [
+                'items_id'      => $tickets_id,
+                'itemtype'      => \Ticket::class,
+                'documents_id'  => $doc_id,
+                'is_private'    => 1,
+                'timeline_position' => \CommonITILObject::TIMELINE_LEFT,
+            ]
+        );
+        $doc_item_id = $doc_item->getID();
+
+        // Verify the document is created with is_private = 1
+        $this->assertTrue($doc_item->getFromDB($doc_item_id));
+        $this->assertEquals(1, $doc_item->fields['is_private']);
+
+        // Create a user without SEEPRIVATE right
+        $user = new \User();
+        $user_id = $user->add([
+            'name' => 'user_no_seeprivate',
+            'password' => 'test_password',
+            'password2' => 'test_password',
+        ]);
+        $this->assertGreaterThan(0, $user_id);
+
+        // Create a read-only profile without SEEPRIVATE
+        $profile_id = $this->createItem(
+            \Profile::class,
+            [
+                'name' => 'Test profile no SEEPRIVATE',
+            ]
+        )->getID();
+
+        // Assign profile to user
+        $this->createItem(
+            \Profile_User::class,
+            [
+                'users_id' => $user_id,
+                'profiles_id' => $profile_id,
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        );
+
+        // Login as the user without SEEPRIVATE right
+        $this->login('user_no_seeprivate', 'test_password', false);
+
+        // Check that the private document is not visible
+        $doc_item_check = new Document_Item();
+        $doc_item_check->getFromDB($doc_item_id);
+        $this->assertFalse($doc_item_check->canViewItem());
+
+        // Clean up and restore session
+        $this->login();
+    }
+
+    /**
+     * Test that private documents are visible to users with SEEPRIVATE right.
+     */
+    public function testPrivateDocumentVisibilityWithSeeprivateRight()
+    {
+        $this->login(); // Login as super-admin who should have SEEPRIVATE
+
+        // Create a ticket
+        $tickets_id = $this->createItem(
+            \Ticket::class,
+            [
+                'name' => 'Test private document visibility with SEEPRIVATE',
+                'content' => 'Test content',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        )->getID();
+
+        // Create a document
+        $doc_id = $this->createItem(
+            \Document::class,
+            [
+                'name' => 'Private test document',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        )->getID();
+
+        // Attach document to ticket as private
+        $doc_item = $this->createItem(
+            Document_Item::class,
+            [
+                'items_id' => $tickets_id,
+                'itemtype' => \Ticket::class,
+                'documents_id' => $doc_id,
+                'is_private' => 1,
+                'timeline_position' => \CommonITILObject::TIMELINE_LEFT,
+            ]
+        );
+        $doc_item_id = $doc_item->getID();
+
+        // Check that the private document is visible
+        $doc_item->getFromDB($doc_item_id);
+        $this->assertTrue($doc_item->canViewItem());
+    }
+
+    /**
+     * Test that public documents are visible to all authorized users.
+     */
+    public function testPublicDocumentVisibility()
+    {
+        $this->login();
+
+        // Create a ticket
+        $ticket = $this->createItem('Ticket', [
+            'name' => 'Test public document visibility',
+            'content' => 'Test content',
+            'entities_id' => $this->getTestRootEntity(true),
+        ]);
+        $tickets_id = $ticket->getID();
+
+        // Create a document
+        $doc_id = $this->createItem('Document', [
+            'name' => 'Public test document',
+            'entities_id' => $this->getTestRootEntity(true),
+        ])->getID();
+
+        // Attach document to ticket as public (is_private = 0)
+        $doc_item = $this->createItem('Document_Item', [
+            'items_id'      => $tickets_id,
+            'itemtype'      => 'Ticket',
+            'documents_id'  => $doc_id,
+            'is_private'    => 0,
+            'timeline_position' => \CommonITILObject::TIMELINE_LEFT,
+        ]);
+        $doc_item_id = $doc_item->getID();
+
+        // Check that the public document is visible
+        $doc_item->getFromDB($doc_item_id);
+        $this->assertTrue($doc_item->canViewItem());
+    }
+
+    /**
+     * Test that documents are public by default (is_private = 0).
+     */
+    public function testDefaultIsPrivateValue()
+    {
+        $this->login();
+
+        // Create a ticket
+        $tickets_id = $this->createItem(
+            \Ticket::class,
+            [
+                'name' => 'Test default is_private',
+                'content' => 'Test content',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        )->getID();
+
+        // Create a document
+        $doc_id = $this->createItem(
+            \Document::class,
+            [
+                'name' => 'Test document default is_private',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        )->getID();
+
+        // Attach document to ticket without specifying is_private
+        $doc_item = $this->createItem(
+            Document_Item::class,
+            [
+                'items_id'      => $tickets_id,
+                'itemtype'      => \Ticket::class,
+                'documents_id'  => $doc_id,
+                'timeline_position' => \CommonITILObject::TIMELINE_LEFT,
+            ]
+        );
+        $doc_item_id = $doc_item->getID();
+
+        // Verify is_private defaults to 0
+        $doc_item->getFromDB($doc_item_id);
+        $this->assertEquals(0, $doc_item->fields['is_private']);
+    }
+
+    /**
+     * Test that SEEPRIVATE constant is correctly defined.
+     */
+    public function testSeeprivateConstant()
+    {
+        $this->assertEquals(8192, Document_Item::SEEPRIVATE);
+    }
+
+    /**
+     * Test that private documents are excluded from email notifications when user doesn't have SEEPRIVATE right.
+     */
+    public function testPrivateDocumentsExcludedFromNotifications()
+    {
+        $this->login();
+
+        // Create a ticket
+        $ticket = $this->createItem(
+            \Ticket::class,
+            [
+                'name' => 'Test notification with private document',
+                'content' => 'Test content',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        );
+
+        $tickets_id = $ticket->getID();
+
+        // Create a public document
+        $public_doc = $this->createItem(
+            \Document::class,
+            [
+                'name' => 'Public document for notification test',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        );
+
+        // Create a private document
+        $private_doc = $this->createItem(
+            \Document::class,
+            [
+                'name' => 'Private document for notification test',
+                'entities_id' => $this->getTestRootEntity(true),
+            ]
+        );
+
+        // Attach public document
+        $this->createItem(
+            Document_Item::class,
+            [
+                'items_id'      => $tickets_id,
+                'itemtype'      => \Ticket::class,
+                'documents_id'  => $public_doc->getID(),
+                'is_private'    => 0,
+                'timeline_position' => \CommonITILObject::TIMELINE_LEFT,
+            ]
+        );
+
+        // Attach private document
+        $this->createItem(
+            Document_Item::class,
+            [
+                'items_id'      => $tickets_id,
+                'itemtype'      => \Ticket::class,
+                'documents_id'  => $private_doc->getID(),
+                'is_private'    => 1,
+                'timeline_position' => \CommonITILObject::TIMELINE_LEFT,
+            ]
+        );
+
+        // Get notification data without show_private (default behavior)
+        $notification = new \NotificationTargetTicket();
+        $notif_data = $notification->getDataForObject($ticket, [
+            'additionnaloption' => [
+                'usertype' => \NotificationTarget::GLPI_USER,
+                'is_self_service' => false,
+                'show_private' => false, // User doesn't have SEEPRIVATE right
+            ],
+        ]);
+
+        // Verify documents array exists
+        $this->assertArrayHasKey('documents', $notif_data);
+
+        // Extract document names from notification data
+        $document_names = array_column($notif_data['documents'], '##document.name##');
+
+        // Verify public document is in notification
+        $this->assertContains('Public document for notification test', $document_names);
+
+        // Verify private document is NOT in notification when show_private is false
+        $this->assertNotContains('Private document for notification test', $document_names);
+
+        // Now test with show_private_documents = true (user has document SEEPRIVATE right)
+        $notif_data_with_private = $notification->getDataForObject($ticket, [
+            'additionnaloption' => [
+                'usertype' => \NotificationTarget::GLPI_USER,
+                'is_self_service' => false,
+                'show_private' => true,
+                'show_private_documents' => true, // User has document SEEPRIVATE right
+            ],
+        ]);
+
+        // Extract document names with private access
+        $document_names_with_private = array_column($notif_data_with_private['documents'], '##document.name##');
+
+        // Verify both documents are in notification when show_private is true
+        $this->assertContains('Public document for notification test', $document_names_with_private);
+        $this->assertContains('Private document for notification test', $document_names_with_private);
+    }
+
+    public function testPrivateDocumentVisibilityOnNonItilItem()
+    {
+        $this->login();
+
+        $computer = $this->createItem(\Computer::class, [
+            'name' => 'Test private doc computer',
+            'entities_id' => $this->getTestRootEntity(true),
+        ]);
+
+        $doc_id = $this->createItem(\Document::class, [
+            'name' => 'Private doc on computer',
+            'entities_id' => $this->getTestRootEntity(true),
+        ])->getID();
+
+        $doc_item = $this->createItem(Document_Item::class, [
+            'items_id'     => $computer->getID(),
+            'itemtype'     => \Computer::class,
+            'documents_id' => $doc_id,
+            'is_private'   => 1,
+        ]);
+        $doc_item_id = $doc_item->getID();
+
+        // Super-admin has SEEPRIVATE and can see any private document
+        $doc_item->getFromDB($doc_item_id);
+        $this->assertTrue($doc_item->canViewItem());
+
+        // Create a user without SEEPRIVATE right
+        $user_id = (new \User())->add([
+            'name'      => 'user_no_seeprivate_computer',
+            'password'  => 'test_password',
+            'password2' => 'test_password',
+        ]);
+        $this->assertGreaterThan(0, $user_id);
+
+        $profile_id = $this->createItem(\Profile::class, [
+            'name' => 'Profile no SEEPRIVATE computer',
+        ])->getID();
+
+        $this->createItem(\Profile_User::class, [
+            'users_id'    => $user_id,
+            'profiles_id' => $profile_id,
+            'entities_id' => $this->getTestRootEntity(true),
+        ]);
+
+        $this->login('user_no_seeprivate_computer', 'test_password', false);
+
+        $doc_item_check = new Document_Item();
+        $doc_item_check->getFromDB($doc_item_id);
+        $this->assertFalse($doc_item_check->canViewItem());
+
+        $this->login();
+    }
+
+    public function testPostAddItemOnlyCopiesTicketLinksToMergedTickets(): void
+    {
+        global $DB;
+
+        $this->login();
+
+        // Ticket B is merged (SON_OF) into ticket A and soft-deleted
+        $ticket_a = $this->createItem(\Ticket::class, ['name' => __FUNCTION__ . ' A', 'content' => 'a']);
+        $ticket_b = $this->createItem(\Ticket::class, ['name' => __FUNCTION__ . ' B', 'content' => 'b']);
+        $ticket_c = $this->createItem(\Ticket::class, ['name' => __FUNCTION__ . ' C', 'content' => 'c']);
+
+        // A followup of ticket C sharing the id of ticket B
+        $followup = $this->createItem(\ITILFollowup::class, [
+            'itemtype' => \Ticket::class,
+            'items_id' => $ticket_c->getID(),
+            'content'  => 'followup',
+        ]);
+        $shared_id = max($ticket_c->getID(), $followup->getID()) + 1;
+        $this->assertTrue($DB->update(\Ticket::getTable(), ['id' => $shared_id], ['id' => $ticket_b->getID()]));
+        $this->assertTrue($DB->update(\ITILFollowup::getTable(), ['id' => $shared_id], ['id' => $followup->getID()]));
+        $this->assertTrue($DB->update(\Ticket::getTable(), ['is_deleted' => 1], ['id' => $shared_id]));
+        $this->createItem(\Ticket_Ticket::class, [
+            'tickets_id_1' => $shared_id,
+            'tickets_id_2' => $ticket_a->getID(),
+            'link'         => \Ticket_Ticket::SON_OF,
+        ]);
+        $this->assertSame([$ticket_a->getID()], \Ticket::getMergedTickets($shared_id));
+
+        $document = $this->createItem(\Document::class, ['name' => __FUNCTION__]);
+
+        // A document of the followup must not be linked to the followup having the id of ticket A
+        $this->createItem(Document_Item::class, [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \ITILFollowup::class,
+            'items_id'     => $shared_id,
+        ]);
+        $this->assertSame(0, countElementsInTable(Document_Item::getTable(), [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \ITILFollowup::class,
+            'items_id'     => $ticket_a->getID(),
+        ]));
+
+        // A document of the merged ticket is still copied to ticket A
+        $this->createItem(Document_Item::class, [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \Ticket::class,
+            'items_id'     => $shared_id,
+        ]);
+        $this->assertSame(1, countElementsInTable(Document_Item::getTable(), [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \Ticket::class,
+            'items_id'     => $ticket_a->getID(),
+        ]));
+    }
+
+    public function testGetTypeItemsForKnowbaseItemDoesNotLeakUnrelatedArticles()
+    {
+        $this->login();
+
+        $document = $this->createItem(\Document::class, [
+            'name' => __FUNCTION__,
+        ]);
+
+        $linked_kb = $this->createItem(\KnowbaseItem::class, [
+            'name'   => __FUNCTION__ . ' linked',
+            'answer' => 'linked',
+            'is_faq' => 0,
+        ]);
+        $this->createItem(Document_Item::class, [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \KnowbaseItem::class,
+            'items_id'     => $linked_kb->getID(),
+        ]);
+
+        // Visible to the "tech" user but linked to another document, not this one
+        $other_document = $this->createItem(\Document::class, [
+            'name' => __FUNCTION__ . ' other',
+        ]);
+        $unrelated_kb = $this->createItem(\KnowbaseItem::class, [
+            'name'   => __FUNCTION__ . ' unrelated',
+            'answer' => 'unrelated',
+            'is_faq' => 0,
+        ]);
+        $this->createItem(Document_Item::class, [
+            'documents_id' => $other_document->getID(),
+            'itemtype'     => \KnowbaseItem::class,
+            'items_id'     => $unrelated_kb->getID(),
+        ]);
+
+        $tech_user = getItemByTypeName('User', 'tech', true);
+        $this->createItems('KnowbaseItem_User', [
+            ['knowbaseitems_id' => $linked_kb->getID(), 'users_id' => $tech_user],
+            ['knowbaseitems_id' => $unrelated_kb->getID(), 'users_id' => $tech_user],
+        ]);
+
+        // "tech" is not a KB admin, so visibility is checked through the OR
+        // criteria merged in Document_Item::getTypeItemsQueryParams()
+        $this->login('tech', 'tech');
+
+        $iterator = Document_Item::getTypeItems($document->getID(), \KnowbaseItem::class);
+        $ids = array_column(iterator_to_array($iterator), 'id');
+
+        $this->assertContains($linked_kb->getID(), $ids);
+        $this->assertNotContains($unrelated_kb->getID(), $ids);
+    }
+
+    public function testCanAttachDocumentToItemUserCanOnlyView()
+    {
+        // "One write is enough": a user who can view (but not edit) an entity-assigned
+        // item and who is allowed to create documents may still attach a document to it.
+        $this->login();
+        $child_id = getItemByTypeName('Entity', '_test_child_1', true);
+        $computer = $this->createItem('Computer', ['name' => 'doc_link_computer', 'entities_id' => $child_id]);
+
+        $this->addRightToProfile('Technician', 'document', READ | CREATE | UPDATE);
+        $this->removeRightFromProfile('Technician', 'computer', CREATE | UPDATE);
+
+        $actor = $this->createItem('User', ['name' => 'doc_actor_' . mt_rand()]);
+        $this->createItem('Profile_User', [
+            'users_id'     => $actor->getID(),
+            'profiles_id'  => getItemByTypeName('Profile', 'Technician', true),
+            'entities_id'  => $child_id,
+            'is_recursive' => 0,
+        ]);
+
+        $this->login($actor->fields['name']);
+        \Session::changeProfile(getItemByTypeName('Profile', 'Technician', true));
+        $this->setEntity('_test_child_1', false);
+
+        // The item is visible but not editable for this user.
+        $this->assertTrue($computer->can($computer->getID(), READ));
+        $this->assertFalse($computer->can($computer->getID(), UPDATE));
+
+        // "Add a new file" path (front/document.form.php) is now allowed.
+        $doc = new \Document();
+        $input = [
+            'name'        => 'linked doc',
+            'itemtype'    => 'Computer',
+            'items_id'    => $computer->getID(),
+            'entities_id' => $child_id,
+        ];
+        $this->assertTrue($doc->can(-1, CREATE, $input));
+
+        // The add form is offered on the item's "Documents" tab.
+        ob_start();
+        Document_Item::showForItem($computer);
+        $html = ob_get_clean();
+        $this->assertStringContainsString('Add a document', $html);
+
+        // The document entity is still enforced: creating it outside the user's entities is refused.
+        $doc2 = new \Document();
+        $input2 = [
+            'name'        => 'linked doc 2',
+            'itemtype'    => 'Computer',
+            'items_id'    => $computer->getID(),
+            'entities_id' => getItemByTypeName('Entity', '_test_root_entity', true),
+        ];
+        $this->assertFalse($doc2->can(-1, CREATE, $input2));
+    }
+
+    public function testLinkAndUnlinkKnowbaseItemRequireArticleUpdateRight(): void
+    {
+        $this->login();
+
+        // Create a FAQ article authored by someone else
+        $kb_id = $this->createItem(\KnowbaseItem::class, [
+            'name'        => 'Unlink ' . $this->getUniqueString(),
+            'answer'      => '<p>x</p>',
+            'entities_id' => $this->getTestRootEntity(true),
+            'users_id'    => getItemByTypeName('User', 'normal', true),
+            'is_faq'      => 1,
+        ])->getID();
+        $this->createItem(\KnowbaseItem_User::class, [
+            'knowbaseitems_id' => $kb_id,
+            'users_id'         => \Session::getLoginUserID(),
+        ]);
+        $document = $this->createItem(\Document::class, [
+            'name'        => 'Unlink ' . $this->getUniqueString(),
+            'entities_id' => $this->getTestRootEntity(true),
+        ]);
+        $link_id = $this->createItem(Document_Item::class, [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \KnowbaseItem::class,
+            'items_id'     => $kb_id,
+        ])->getID();
+
+        $this->setEntity('_test_root_entity', true);
+        $link = new Document_Item();
+
+        // We are a KB admin so we can edit the articles (and thus unlink the doc).
+        $this->assertTrue($link->can($link_id, PURGE));
+
+        // No longer kb admin but still has the document update right
+        $_SESSION['glpiactiveprofile']['knowbase'] = READ | UPDATE;
+        $this->assertTrue($document->can($document->getID(), UPDATE));
+
+        // Load article using ID and confirm expected rights
+        $kb = new \KnowbaseItem();
+        $this->assertTrue($kb->getFromDB($kb_id));
+        $this->assertTrue($kb->can($kb_id, READ));
+        $this->assertFalse($kb->can($kb_id, UPDATE));
+
+        // Should not be able to unlink the doc
+        $this->assertFalse($link->can($link_id, DELETE));
+        $this->assertFalse($link->can($link_id, PURGE));
+
+        // Should not be able to link another document either
+        $input = [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \KnowbaseItem::class,
+            'items_id'     => $kb_id,
+        ];
+        $this->assertFalse((new Document_Item())->can(-1, CREATE, $input));
+    }
+
+    /**
+     * The document list of an item must not expose the links flagged as private to a user
+     * that does not hold the SEEPRIVATE right.
+     */
+    public function testGetDocumentForItemRequestHidesPrivateDocuments()
+    {
+        global $DB;
+
+        // --- arrange : glpi user attaches a private and a public document to a ticket ---
+        $this->login('glpi', 'glpi');
+
+        [$private_document, $public_document] = $this->createItems(\Document::class, [
+            ['name' => 'private document', 'filename' => 'private.xls'],
+            ['name' => 'public document', 'filename' => 'public.xls'],
+        ]);
+
+        $ticket = $this->createItem(\Ticket::class, [
+            'name'    => 'New ticket',
+            'content' => 'content',
+        ]);
+
+        $this->createItems(Document_Item::class, [
+            [
+                'documents_id' => $private_document->getID(),
+                'items_id'     => $ticket->getID(),
+                'itemtype'     => \Ticket::class,
+                'is_private'   => 1,
+            ],
+            [
+                'documents_id' => $public_document->getID(),
+                'items_id'     => $ticket->getID(),
+                'itemtype'     => \Ticket::class,
+            ],
+        ]);
+
+        // --- arrange : post-only observes the ticket, with no right on documents ---
+        $this->login('post-only', 'postonly');
+        $_SESSION["glpiactiveprofile"][\Ticket::$rightname] = READ;
+        $this->createItem(\Ticket_User::class, [
+            'tickets_id' => $ticket->getID(),
+            'type'       => \CommonITILActor::OBSERVER,
+            'users_id'   => \Session::getLoginUserID(),
+        ]);
+        $ticket->getFromDB($ticket->getID());
+
+        $listed_documents = static function (\Ticket $ticket) use ($DB): array {
+            $criteria = Document_Item::getDocumentForItemRequest($ticket, ['assocdate DESC']);
+            return array_column(iterator_to_array($DB->request($criteria)), 'name');
+        };
+
+        // --- act + assert ---
+        // Only the public document is listed ...
+        $this->assertSame(['public document'], $listed_documents($ticket));
+
+        // ... unless post-only is allowed to see private documents
+        $_SESSION["glpiactiveprofile"][\Document::$rightname] = Document_Item::SEEPRIVATE;
+        $this->assertEqualsCanonicalizing(
+            ['private document', 'public document'],
+            $listed_documents($ticket)
+        );
+    }
+
+    /**
+     * An anonymous session has no user id: the privacy criteria must not compare the link owner
+     * with `false`, which the database would match against the ownerless links stored with a 0.
+     */
+    public function testGetPrivacyRestrictionCriteriaOnAnonymousSession()
+    {
+        global $DB;
+
+        $this->login('glpi', 'glpi');
+
+        $document = $this->createItem(\Document::class, [
+            'name'     => 'private document',
+            'filename' => 'private.xls',
+        ]);
+        $ticket = $this->createItem(\Ticket::class, ['name' => 'New ticket', 'content' => 'content']);
+
+        // A private link left without an owner, as an import or a crontask would create it
+        $ownerless_link = $this->createItem(Document_Item::class, [
+            'documents_id' => $document->getID(),
+            'items_id'     => $ticket->getID(),
+            'itemtype'     => \Ticket::class,
+            'is_private'   => 1,
+            'users_id'     => 0,
+        ]);
+
+        \Session::destroy();
+
+        $matches = $DB->request([
+            'FROM'  => Document_Item::getTable(),
+            'COUNT' => 'cpt',
+            'WHERE' => [
+                ['id' => $ownerless_link->getID()],
+                ...Document_Item::getPrivacyRestrictionCriteria(),
+            ],
+        ])->current();
+
+        $this->assertSame(
+            0,
+            (int) $matches['cpt'],
+            'An ownerless private link must not be exposed to an anonymous session'
+        );
+    }
+
+    /**
+     * The document list of a Document unions a forward and a reverse query. The reverse one
+     * rebuilds its own WHERE clause, and must restrict private links just like the forward one.
+     */
+    public function testShowListForItemReverseBranchHidesPrivateDocuments()
+    {
+        global $DB;
+
+        // --- arrange : a private link whose document is the browsed one ---
+        $this->login('glpi', 'glpi');
+
+        [$browsed_document, $linked_document] = $this->createItems(\Document::class, [
+            ['name' => 'browsed document', 'filename' => 'browsed.xls'],
+            ['name' => 'privately linked document', 'filename' => 'linked.xls'],
+        ]);
+
+        // `filepath` is derived from the upload, so it is set aside of the add(). Without it the
+        // rendering emits a deprecation, which the test case treats as a failure.
+        foreach ([$browsed_document, $linked_document] as $document) {
+            $DB->update(
+                \Document::getTable(),
+                ['filepath' => 'xls/' . $document->fields['filename']],
+                ['id' => $document->getID()]
+            );
+        }
+
+        $this->createItem(Document_Item::class, [
+            'documents_id' => $browsed_document->getID(),
+            'items_id'     => $linked_document->getID(),
+            'itemtype'     => \Document::class,
+            'is_private'   => 1,
+        ]);
+
+        $this->login('post-only', 'postonly');
+        $_SESSION["glpiactiveprofile"][\Document::$rightname] = READ;
+        $browsed_document->getFromDB($browsed_document->getID());
+
+        $rendered_list = static function (\Document $document): string {
+            ob_start();
+            Document_Item::showListForItem($document);
+            return (string) ob_get_clean();
+        };
+
+        // --- act + assert ---
+        $this->assertStringNotContainsString(
+            'privately linked document',
+            $rendered_list($browsed_document),
+            'The reverse branch must not list a private link'
+        );
+
+        $_SESSION["glpiactiveprofile"][\Document::$rightname] = Document_Item::SEEPRIVATE;
+        $this->assertStringContainsString(
+            'privately linked document',
+            $rendered_list($browsed_document),
+            'The SEEPRIVATE right must restore the private link in the reverse branch'
+        );
+    }
+
+    public function testCannotUnlinkDocumentWithOnlyReadRights(): void
+    {
+        $this->login();
+        $ticket = $this->createItem(\Ticket::class, [
+            'name'        => 'Unlink ' . $this->getUniqueString(),
+            'content'     => 'x',
+            'entities_id' => $this->getTestRootEntity(true),
+        ]);
+        $document = $this->createItem(\Document::class, [
+            'name'        => 'Unlink ' . $this->getUniqueString(),
+            'entities_id' => $this->getTestRootEntity(true),
+        ]);
+        $link_id = $this->createItem(Document_Item::class, [
+            'documents_id' => $document->getID(),
+            'itemtype'     => \Ticket::class,
+            'items_id'     => $ticket->getID(),
+        ])->getID();
+
+        // Can view both items, but can update neither
+        $_SESSION['glpiactiveprofile']['document'] = READ;
+        $_SESSION['glpiactiveprofile']['ticket'] = READ;
+        $this->assertTrue($ticket->can($ticket->getID(), READ));
+        $this->assertFalse($ticket->can($ticket->getID(), UPDATE));
+
+        $link = new Document_Item();
+        $this->assertFalse($link->can($link_id, DELETE));
+        $this->assertFalse($link->can($link_id, PURGE));
+
+        // Update right on the document side is enough
+        $_SESSION['glpiactiveprofile']['document'] = READ | UPDATE;
+        $_SESSION['glpiactiveprofile']['ticket'] = READ;
+        $this->assertTrue($link->can($link_id, DELETE));
+        $this->assertTrue($link->can($link_id, PURGE));
+
+        // Update right on the ticket side is enough
+        $_SESSION['glpiactiveprofile']['document'] = READ;
+        $_SESSION['glpiactiveprofile']['ticket'] = READ | UPDATE;
+        $this->assertTrue($link->can($link_id, DELETE));
+        $this->assertTrue($link->can($link_id, PURGE));
+    }
+}

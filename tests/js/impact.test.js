@@ -1,0 +1,358 @@
+/**
+ * ---------------------------------------------------------------------
+ *
+ * GLPI - Gestionnaire Libre de Parc Informatique
+ *
+ * http://glpi-project.org
+ *
+ * @copyright 2015-2026 Teclib' and contributors.
+ * @licence   https://www.gnu.org/licenses/gpl-3.0.html
+ *
+ * ---------------------------------------------------------------------
+ *
+ * LICENSE
+ *
+ * This file is part of GLPI.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * ---------------------------------------------------------------------
+ */
+
+import '/js/impact.js';
+
+describe('Impact', () => {
+    //let window_href_spy;
+    beforeEach(() => {
+        delete window.location;
+        Object.defineProperty(window, 'location', {
+            value: {
+                href: '',
+                reload: vi.fn().mockImplementation(() => {})
+            },
+            writable: true,
+            configurable: true,
+        });
+        //window_href_spy = vi.spyOn(window.location, 'href');
+    });
+    it('Sets globals', () => {
+        expect(window.GLPIImpact).toBeDefined();
+    });
+    it('Badge Hitbox Search Link Correct', () => {
+        window.GLPIImpact.cy = {
+            zoom: () => 1,
+        };
+        window.GLPIImpact.badgesHitboxes = [
+            {
+                "position": {
+                    "x": 600,
+                    "y": 420
+                },
+                "target": "/front/ticket.php?is_deleted=0&as_map=0&search=Search&itemtype=Ticket",
+                "itemtype": "Computer",
+                "id": "2",
+                "id_option": 2
+            },
+            {
+                "position": {
+                    "x": 700,
+                    "y": 420
+                },
+                "target": "/front/ticket.php?is_deleted=0&as_map=0&search=Search&itemtype=Ticket",
+                "itemtype": "Computer",
+                "id": "2",
+            }
+        ];
+        window.location.href = '';
+        window.GLPIImpact.checkBadgeHitboxes({x: 601, y: 421}, true, false);
+        // This badge has a known ID option, so we should be using the metacriteria
+        expect(window.location.href).toBe('/front/ticket.php?is_deleted=0&as_map=0&search=Search&itemtype=Ticket&criteria[0][link]=AND&criteria[0][field]=2&criteria[0][itemtype]=Computer&criteria[0][meta]=1&criteria[0][searchtype]=contains&criteria[0][value]=2&criteria[1][link]=AND&criteria[1][field]=14&criteria[1][searchtype]=equals&criteria[1][value]=1&criteria[2][link]=AND&criteria[2][field]=12&criteria[2][searchtype]=equals&criteria[2][value]=notold');
+        window.GLPIImpact.checkBadgeHitboxes({x: 701, y: 421}, true, false);
+        // This badge has no ID option, so we should be using a simple criteria as a fallback
+        expect(window.location.href).toBe('/front/ticket.php?is_deleted=0&as_map=0&search=Search&itemtype=Ticket&criteria[0][link]=AND&criteria[0][field]=13&criteria[0][searchtype]=contains&criteria[0][value]=2&criteria[1][link]=AND&criteria[1][field]=131&criteria[1][searchtype]=equals&criteria[1][value]=Computer&criteria[2][link]=AND&criteria[2][field]=14&criteria[2][searchtype]=equals&criteria[2][value]=1&criteria[3][link]=AND&criteria[3][field]=12&criteria[3][searchtype]=equals&criteria[3][value]=notold');
+        // Test outside hitbox
+        window.location.href = '';
+        window.GLPIImpact.checkBadgeHitboxes({x: 800, y: 421}, true, false);
+        expect(window.location.href).toBe('');
+    });
+    it('Undo/Redo - Generic', () => {
+        window.GLPIImpact.addToUndo('action1', {'something': 'test'});
+        window.GLPIImpact.addToUndo('action2', {'else': 'test2'});
+        window.GLPIImpact.addToUndo('action3', {'another': 'test3'});
+        expect(window.GLPIImpact.undoStack.length).toBe(3);
+        expect(window.GLPIImpact.redoStack.length).toBe(0);
+        window.GLPIImpact.undo();
+        expect(window.GLPIImpact.undoStack.length).toBe(2);
+        expect(window.GLPIImpact.redoStack.length).toBe(1);
+        expect(window.GLPIImpact.redoStack[0].code).toBe('action3');
+        window.GLPIImpact.undo();
+        expect(window.GLPIImpact.undoStack.length).toBe(1);
+        expect(window.GLPIImpact.redoStack.length).toBe(2);
+        expect(window.GLPIImpact.redoStack[1].code).toBe('action2');
+        window.GLPIImpact.redo();
+        expect(window.GLPIImpact.undoStack.length).toBe(2);
+        expect(window.GLPIImpact.redoStack.length).toBe(1);
+        expect(window.GLPIImpact.undoStack[1].code).toBe('action2');
+
+        // undo all + some extra to test handling empty stack
+        window.GLPIImpact.undo();
+        window.GLPIImpact.undo();
+        window.GLPIImpact.undo();
+        window.GLPIImpact.undo();
+        expect(window.GLPIImpact.undoStack.length).toBe(0);
+        expect(window.GLPIImpact.redoStack.length).toBe(3);
+
+        // redo all + some extra to test handling empty stack
+        window.GLPIImpact.redo();
+        window.GLPIImpact.redo();
+        window.GLPIImpact.redo();
+        window.GLPIImpact.redo();
+        expect(window.GLPIImpact.undoStack.length).toBe(3);
+        expect(window.GLPIImpact.redoStack.length).toBe(0);
+    });
+    it('Hidden selector', () => {
+        window.GLPIImpact.directionVisibility = {};
+        expect(window.GLPIImpact.DEFAULT_DEPTH).toBe(5);
+        window.GLPIImpact.maxDepth = 3;
+        expect(window.GLPIImpact.getHiddenSelector()).toBe(`[flag != 0], [depth > 3][depth !> ${Number.MAX_SAFE_INTEGER}]`);
+
+        window.GLPIImpact.directionVisibility = {[window.GLPIImpact.FORWARD]: 1};
+        expect(window.GLPIImpact.getHiddenSelector()).toBe(`[flag = 2], [depth > 3][depth !> ${Number.MAX_SAFE_INTEGER}]`);
+        window.GLPIImpact.directionVisibility = {[window.GLPIImpact.BACKWARD]: 1};
+        expect(window.GLPIImpact.getHiddenSelector()).toBe(`[flag = 1], [depth > 3][depth !> ${Number.MAX_SAFE_INTEGER}]`);
+        window.GLPIImpact.directionVisibility = {
+            [window.GLPIImpact.FORWARD]: 1,
+            [window.GLPIImpact.BACKWARD]: 1
+        };
+        expect(window.GLPIImpact.getHiddenSelector()).toBe(`[flag = -1], [depth > 3][depth !> ${Number.MAX_SAFE_INTEGER}]`);
+    });
+    it('Get network styles', () => {
+        const styles = window.GLPIImpact.getNetworkStyle();
+        expect(Array.isArray(styles)).toBe(true);
+        expect(styles.length).toBeGreaterThan(0);
+        styles.forEach((style) => {
+            expect(style).toBeTypeOf('object');
+            expect(style).toHaveProperty('selector');
+            expect(style).toSatisfy((s) => Object.prototype.hasOwnProperty.call(s, 'style') || Object.prototype.hasOwnProperty.call(s, 'css'));
+        });
+    });
+    it('Get preset layout', () => {
+        const layout = window.GLPIImpact.getPresetLayout({
+            'node1': {x: 100, y: 100},
+            'node2': {x: 150, y: 200},
+            'node3': {x: 200, y: 300},
+        });
+        expect(window.GLPIImpact.no_positions).toHaveLength(0);
+        expect(layout.name).toBe('preset');
+        expect(layout.positions).toBeTypeOf('function');
+
+        expect(layout.positions({
+            data: (k) => ({id: 'node1'}[k]),
+            isParent: () => false,
+        })).toEqual({x: 100, y: 100});
+        expect(layout.positions({
+            data: (k) => ({id: 'node2'}[k]),
+            isParent: () => false,
+        })).toEqual({x: 150, y: 200});
+        expect(layout.positions({
+            data: (k) => ({id: 'node3'}[k]),
+            isParent: () => false,
+        })).toEqual({x: 200, y: 300});
+        expect(layout.positions({
+            data: (k) => ({id: 'node3'}[k]),
+            isParent: () => true,
+        })).toEqual({x: 0, y: 0});
+        expect(window.GLPIImpact.no_positions).toHaveLength(0);
+        expect(layout.positions({
+            data: (k) => ({id: 'node4'}[k]),
+            isParent: () => false,
+        })).toEqual({x: 0, y: 0});
+        expect(window.GLPIImpact.no_positions).toHaveLength(1);
+    });
+    it('Make ID for nodes and edges', () => {
+        expect(window.GLPIImpact.makeID(1, 'Computer', 2)).toBe('Computer::2');
+        expect(window.GLPIImpact.makeID(2, 'start', 'node1')).toBe('start->node1');
+        expect(window.GLPIImpact.makeID(99, 'start', 'node1')).toBeNull();
+    });
+    it('Make ID selector', () => {
+        expect(window.GLPIImpact.makeIDSelector('node1')).toBe('[id=\'node1\']');
+    });
+    it('Remap compound ids after save', () => {
+        const child1 = {move: vi.fn()};
+        const child2 = {move: vi.fn()};
+        const compound = {
+            length   : 1,
+            data     : () => ({id: 'tmp-abc', label: 'My group', color: '#dadada'}),
+            children : () => [child1, child2],
+            classes  : () => [],
+            selected : () => false,
+            grabbable: () => true,
+            remove   : vi.fn(),
+        };
+        const added = [];
+        window.GLPIImpact.cy = {
+            getElementById: (id) => (id === 'tmp-abc' ? compound : {length: 0}),
+            add           : (ele) => added.push(ele),
+        };
+
+        window.GLPIImpact.remapCompoundIds({'tmp-abc': 5});
+
+        expect(added).toHaveLength(1);
+        expect(added[0].group).toBe('nodes');
+        expect(added[0].data.id).toBe('5');
+        expect(added[0].data.label).toBe('My group');
+        expect(child1.move).toHaveBeenCalledWith({parent: '5'});
+        expect(child2.move).toHaveBeenCalledWith({parent: '5'});
+        expect(compound.remove).toHaveBeenCalled();
+    });
+    it('Remap compound ids preserves cytoscape element state', () => {
+        const compound = {
+            length   : 1,
+            data     : () => ({id: 'tmp-abc', label: 'My group'}),
+            children : () => [],
+            classes  : () => ['some-class'],
+            selected : () => true,
+            grabbable: () => false,
+            remove   : vi.fn(),
+        };
+        const added = [];
+        window.GLPIImpact.cy = {
+            getElementById: () => compound,
+            add           : (ele) => added.push(ele),
+        };
+
+        window.GLPIImpact.remapCompoundIds({'tmp-abc': 5});
+
+        expect(added).toHaveLength(1);
+        expect(added[0].classes).toEqual(['some-class']);
+        expect(added[0].selected).toBe(true);
+        expect(added[0].grabbable).toBe(false);
+    });
+    it('Remap compound ids ignores missing compounds', () => {
+        window.GLPIImpact.cy = {
+            getElementById: () => ({length: 0}),
+            add           : vi.fn(),
+        };
+
+        window.GLPIImpact.remapCompoundIds({'tmp-gone': 7});
+
+        expect(window.GLPIImpact.cy.add).not.toHaveBeenCalled();
+    });
+    it('Regression #25192: second save uses the real compound id, not the temporary one', () => {
+        // Real cytoscape core, not a mock — exercises the actual selector/delta logic.
+        const cytoscape = require('cytoscape');
+        const cy = cytoscape({
+            elements: [
+                {group: 'nodes', data: {id: 'Computer::1', impactitem_id: 1}},
+                {group: 'nodes', data: {id: 'Computer::2', impactitem_id: 2}},
+                {group: 'nodes', data: {id: 'Computer::3', impactitem_id: 3}},
+            ],
+        });
+        window.GLPIImpact.cy = cy;
+        window.GLPIImpact.startNode = 'Computer::1';
+        window.GLPIImpact.initialState = window.GLPIImpact.getCurrentState();
+
+        // Group nodes 2 and 3, same as addCompoundFromSelection() — cytoscape assigns the compound a random id.
+        const compound = cy.add({group: 'nodes', data: {color: '#dadada', label: 'Grp'}});
+        const tmpId = compound.id();
+        cy.getElementById('Computer::2').move({parent: tmpId});
+        cy.getElementById('Computer::3').move({parent: tmpId});
+
+        const firstSaveDelta = window.GLPIImpact.computeDelta();
+        expect(firstSaveDelta.compounds[tmpId].action).toBe(window.GLPIImpact.DELTA_ACTION_ADD);
+        expect(firstSaveDelta.items['2'].parent_id).toBe(tmpId);
+
+        // Simulate the first save's response and the save handler reacting to it.
+        window.GLPIImpact.remapCompoundIds({[tmpId]: 5});
+        window.GLPIImpact.initialState = window.GLPIImpact.getCurrentState();
+
+        // Without reloading the page, add a 3rd node straight into the group
+        cy.add({group: 'nodes', data: {id: 'Computer::4', impactitem_id: 4}});
+        cy.getElementById('Computer::4').move({parent: '5'});
+
+        const secondSaveDelta = window.GLPIImpact.computeDelta();
+
+        // The bug: before the fix this would carry the stale temp id as parent_id.
+        expect(secondSaveDelta.items['4'].parent_id).toBe('5');
+        expect(secondSaveDelta.items['4'].parent_id).not.toBe(tmpId);
+        // Unchanged since the first save, so it must not be re-sent as an ADD.
+        expect(secondSaveDelta.compounds).not.toHaveProperty(tmpId);
+    });
+    it('Regression #25192: undo can still remove a compound after its id is remapped', () => {
+        const cytoscape = require('cytoscape');
+        const cy = cytoscape({
+            elements: [
+                {group: 'nodes', data: {id: 'Computer::1'}},
+                {group: 'nodes', data: {id: 'Computer::2'}},
+                {group: 'nodes', data: {id: 'Computer::3'}},
+            ],
+        });
+        window.GLPIImpact.cy = cy;
+        window.GLPIImpact.startNode = 'Computer::1';
+
+        // Group nodes 2 and 3, same as addCompoundFromSelection().
+        const compound = cy.add({group: 'nodes', data: {color: '#dadada', label: 'Grp'}});
+        const tmpId = compound.id();
+        cy.getElementById('Computer::2').move({parent: tmpId});
+        cy.getElementById('Computer::3').move({parent: tmpId});
+
+        // Record the undo entry the way the "edit compound" dialog does on creation.
+        window.GLPIImpact.addToUndo(window.GLPIImpact.ACTION_ADD_COMPOUND, {
+            data: {id: tmpId, label: 'Grp', color: '#dadada'},
+            children: ['Computer::2', 'Computer::3'],
+        });
+
+        // Simulate the save's response remapping the compound to its real id.
+        window.GLPIImpact.remapCompoundIds({[tmpId]: 5});
+
+        // The bug: before the fix, this undo entry still pointed at the temp
+        // id and could not find the (now renamed) compound node to remove.
+        window.GLPIImpact.undo();
+
+        expect(cy.getElementById('5').length).toBe(0);
+        expect(cy.getElementById('Computer::2').isOrphan()).toBe(true);
+        expect(cy.getElementById('Computer::3').isOrphan()).toBe(true);
+    });
+    it('Regression #25192: save stays clean after a successful compound remap', () => {
+        document.body.innerHTML = '<button id="save_impact"></button>'
+            + '<form name="form_impact_network" action="/ajax/impact.php"></form>';
+
+        const cytoscape = require('cytoscape');
+        const cy = cytoscape({elements: [{group: 'nodes', data: {id: 'Computer::1'}}]});
+        window.GLPIImpact.cy = cy;
+        window.GLPIImpact.startNode = 'Computer::1';
+
+        // Wire the same add/remove -> dirty handler the real graph uses.
+        cy.on('add remove', window.GLPIImpact.onChange);
+
+        const compound = cy.add({group: 'nodes', data: {color: '#dadada', label: 'Grp'}});
+        const tmpId = compound.id();
+        window.GLPIImpact.initialState = window.GLPIImpact.getCurrentState();
+
+        const originalAjax = window.$.ajax;
+        window.$.ajax = function(options) {
+            options.success({compounds_mapping: {[tmpId]: 5}});
+        };
+
+        window.GLPIImpact.initToolbar();
+        window.$(window.GLPIImpact.selectors.save).trigger('click');
+
+        window.$.ajax = originalAjax;
+
+        // The bug: remapCompoundIds() adds/removes graph elements, which
+        // marks the workspace dirty again right after the save succeeded.
+        expect(window.$(window.GLPIImpact.selectors.save).hasClass('dirty')).toBe(false);
+        expect(window.$(window.GLPIImpact.selectors.save).hasClass('clean')).toBe(true);
+    });
+});
