@@ -9,7 +9,7 @@ No Dockhand, crie uma stack **From Git** e informe:
 
 - Compose file path: `deploy/dockhand/compose.yaml`
 - Context directory: `deploy/dockhand`
-- Porta padrao: `8080`
+- Porta padrao: `8085`
 
 Cadastre as variaveis abaixo no ambiente da stack antes do deploy:
 
@@ -26,7 +26,7 @@ senhas obrigatorias e escolha **Save & Deploy**.
 
 Depois que os healthchecks estiverem saudaveis, acesse:
 
-`http://localhost:8080`
+`http://localhost:8085`
 
 Credenciais iniciais do GLPI:
 
