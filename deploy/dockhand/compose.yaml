@@ -2,7 +2,11 @@ name: glpi
 
 services:
   glpi:
-    image: glpi/glpi:${GLPI_VERSION:-12.0}
+    image: gestao-ti-glpi-rvb:${GLPI_VERSION:-12.0}
+    build:
+      context: .
+      args:
+        GLPI_VERSION: ${GLPI_VERSION:-12.0}
     restart: unless-stopped
     ports:
       - "${GLPI_HTTP_PORT:-8085}:80"
@@ -26,6 +30,33 @@ services:
       timeout: 10s
       retries: 10
       start_period: 90s
+
+  configure:
+    image: mariadb:${MARIADB_VERSION:-11.8}
+    restart: "no"
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Defina MARIADB_ROOT_PASSWORD no Dockhand}
+      GLPI_DB_NAME: ${GLPI_DB_NAME:-glpi}
+    depends_on:
+      glpi:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    command:
+      - sh
+      - -ec
+      - |
+        mariadb -h db -u root -p"$$MARIADB_ROOT_PASSWORD" "$$GLPI_DB_NAME" -e "
+          INSERT INTO glpi_configs (context, name, value)
+          VALUES ('core', 'language', 'pt_BR')
+          ON DUPLICATE KEY UPDATE value = 'pt_BR';
+          INSERT INTO glpi_configs (context, name, value)
+          VALUES ('core', 'palette', 'rvb')
+          ON DUPLICATE KEY UPDATE value = 'rvb';
+          UPDATE glpi_users
+          SET language = 'pt_BR', palette = 'rvb'
+          WHERE is_deleted = 0;
+        "
 
   db:
     image: mariadb:${MARIADB_VERSION:-11.8}

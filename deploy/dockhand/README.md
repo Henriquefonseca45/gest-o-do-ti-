@@ -1,7 +1,14 @@
 # GLPI no Dockhand
 
-Esta stack usa a imagem oficial do GLPI, instala o banco automaticamente na
-primeira inicializacao e mantem os dados em volumes nomeados do Docker.
+Esta stack cria uma imagem derivada da imagem oficial do GLPI, instala o banco
+automaticamente e mantem os dados em volumes nomeados do Docker.
+
+O deploy tambem aplica automaticamente:
+
+- idioma padrao `Portugues do Brasil (pt_BR)`;
+- idioma `pt_BR` para todos os usuarios existentes;
+- tema corporativo RVB em azul e branco;
+- identidade RVB na tela de login e navegacao interna.
 
 ## Importacao pelo Git
 
@@ -40,4 +47,12 @@ Troque a senha imediatamente no primeiro acesso.
 - `glpi_data`: configuracoes, arquivos, logs e marketplace do GLPI.
 - `db_data`: banco MariaDB.
 - A imagem executa migracoes automaticamente ao atualizar a tag do GLPI.
+- O servico `configure` pode aparecer como concluido/exited com codigo 0; isso e
+  esperado, pois ele apenas aplica idioma e tema apos o GLPI ficar saudavel.
 - Nao remova os volumes ao recriar ou atualizar a stack.
+
+## Aplicar uma atualizacao visual
+
+Depois de sincronizar uma alteracao pelo Git, use no Dockhand a opcao de
+reconstruir a imagem sem cache e faca o redeploy da stack. Usuarios que estavam
+conectados devem sair e entrar novamente para recarregar idioma e tema.
