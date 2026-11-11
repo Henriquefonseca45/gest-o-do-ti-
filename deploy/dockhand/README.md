@@ -49,6 +49,9 @@ Troque a senha imediatamente no primeiro acesso.
 - A imagem executa migracoes automaticamente ao atualizar a tag do GLPI.
 - O servico `configure` pode aparecer como concluido/exited com codigo 0; isso e
   esperado, pois ele apenas aplica idioma e tema apos o GLPI ficar saudavel.
+- O servico `theme` tambem termina com codigo 0 depois de instalar os arquivos
+  visuais no volume persistente. O conteiner principal permanece na imagem
+  oficial, sem alterar o processo de inicializacao do GLPI.
 - Nao remova os volumes ao recriar ou atualizar a stack.
 
 ## Aplicar uma atualizacao visual

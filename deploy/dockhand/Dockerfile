@@ -1,14 +1,7 @@
-ARG GLPI_VERSION=12.0
-FROM glpi/glpi:${GLPI_VERSION}
-
-USER root
+FROM alpine:3.23
 
 COPY rvb-theme.css /opt/rvb/rvb-theme.css
-COPY rvb-entrypoint.sh /opt/rvb/entrypoint.sh
 
-RUN chmod 0555 /opt/rvb/entrypoint.sh \
-    && chmod 0444 /opt/rvb/rvb-theme.css
+RUN chmod 0444 /opt/rvb/rvb-theme.css
 
-USER www-data
-
-ENTRYPOINT ["/opt/rvb/entrypoint.sh"]
+CMD ["sh", "-ec", "mkdir -p /var/glpi/files/_themes; rm -f /var/glpi/files/_themes/rvb.scss; cp /opt/rvb/rvb-theme.css /var/glpi/files/_themes/rvb.css; chown -R 33:33 /var/glpi/files/_themes"]
