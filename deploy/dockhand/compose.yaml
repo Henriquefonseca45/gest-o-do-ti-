@@ -23,7 +23,12 @@ services:
       theme:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost/"]
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://localhost/pics/logos/logo-GLPI-100-white.png
       interval: 30s
       timeout: 10s
       retries: 10

@@ -52,6 +52,8 @@ Troque a senha imediatamente no primeiro acesso.
 - O servico `theme` tambem termina com codigo 0 depois de instalar os arquivos
   visuais no volume persistente. O conteiner principal permanece na imagem
   oficial, sem alterar o processo de inicializacao do GLPI.
+- O healthcheck valida um recurso estatico do Apache para nao depender da
+  renderizacao do tema antes do servico `configure` concluir.
 - Nao remova os volumes ao recriar ou atualizar a stack.
 
 ## Aplicar uma atualizacao visual
