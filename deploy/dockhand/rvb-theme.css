@@ -1,0 +1,70 @@
+/* theme-name: RVB Corporativo */
+
+:root[data-glpi-theme="rvb"] {
+    --tblr-primary-rgb: 0, 92, 169;
+    --tblr-primary: rgb(var(--tblr-primary-rgb));
+    --tblr-primary-fg: #fff;
+    --tblr-link-color-rgb: 0, 75, 147;
+    --tblr-link-color: rgb(var(--tblr-link-color-rgb));
+    --tblr-navbar-color: #003b73;
+    --tblr-body-bg: #f3f7fb;
+    --tblr-bg-surface: #fff;
+    --glpi-mainmenu-bg: #003b73;
+    --glpi-mainmenu-fg: #fff;
+    --glpi-mainmenu-fg-muted: #d9e8f6;
+    --glpi-mainmenu-active-bg: #005ca9;
+    --glpi-form-header-fg: #004b93;
+    --glpi-helpdesk-header: #d9e8f6;
+    --glpi-logo-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='170' viewBox='0 0 520 170'%3E%3Cg fill='%23ffffff'%3E%3Crect x='18' y='45' width='18' height='62' rx='4'/%3E%3Crect x='43' y='31' width='18' height='90' rx='4'/%3E%3Crect x='68' y='17' width='18' height='118' rx='4'/%3E%3Cpath d='M98 43h25l22 28 22-28h25l-47 59z'/%3E%3Ctext x='205' y='105' font-family='Arial,sans-serif' font-size='82' font-weight='800' letter-spacing='5'%3ERVB%3C/text%3E%3C/g%3E%3Ctext x='207' y='136' fill='%23d9e8f6' font-family='Arial,sans-serif' font-size='20' font-weight='600' letter-spacing='4'%3EISOLANTES%3C/text%3E%3C/svg%3E");
+    --glpi-logo-light-reduced: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' rx='28' fill='%23004b93'/%3E%3Ctext x='75' y='94' text-anchor='middle' fill='white' font-family='Arial,sans-serif' font-size='60' font-weight='800'%3ERVB%3C/text%3E%3C/svg%3E");
+    --glpi-logo-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='170' viewBox='0 0 520 170'%3E%3Cg fill='%23004b93'%3E%3Crect x='18' y='45' width='18' height='62' rx='4'/%3E%3Crect x='43' y='31' width='18' height='90' rx='4'/%3E%3Crect x='68' y='17' width='18' height='118' rx='4'/%3E%3Cpath d='M98 43h25l22 28 22-28h25l-47 59z'/%3E%3Ctext x='205' y='105' font-family='Arial,sans-serif' font-size='82' font-weight='800' letter-spacing='5'%3ERVB%3C/text%3E%3C/g%3E%3Ctext x='207' y='136' fill='%235b6778' font-family='Arial,sans-serif' font-size='20' font-weight='600' letter-spacing='4'%3EISOLANTES%3C/text%3E%3C/svg%3E");
+    --glpi-logo-dark-reduced: var(--glpi-logo-light-reduced);
+    --glpi-logo-dark-login: var(--glpi-logo-dark);
+    --glpi-logo-light-login: var(--glpi-logo-light);
+    --glpi-palette-color-1: #003b73;
+    --glpi-palette-color-2: #ffffff;
+    --glpi-palette-color-3: #005ca9;
+    --glpi-palette-color-4: #58a8df;
+}
+
+:root[data-glpi-theme="rvb"] .card {
+    border-color: #d7e4f0;
+    box-shadow: 0 8px 28px rgb(0 59 115 / 8%);
+}
+
+:root[data-glpi-theme="rvb"] .btn-primary {
+    box-shadow: 0 4px 12px rgb(0 92 169 / 22%);
+}
+
+body.welcome-anonymous {
+    --tblr-primary-rgb: 0, 92, 169;
+    --tblr-primary: rgb(var(--tblr-primary-rgb));
+    --tblr-primary-fg: #fff;
+    --tblr-link-color-rgb: 0, 75, 147;
+    --glpi-logo-dark-login: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='170' viewBox='0 0 520 170'%3E%3Cg fill='%23004b93'%3E%3Crect x='18' y='45' width='18' height='62' rx='4'/%3E%3Crect x='43' y='31' width='18' height='90' rx='4'/%3E%3Crect x='68' y='17' width='18' height='118' rx='4'/%3E%3Cpath d='M98 43h25l22 28 22-28h25l-47 59z'/%3E%3Ctext x='205' y='105' font-family='Arial,sans-serif' font-size='82' font-weight='800' letter-spacing='5'%3ERVB%3C/text%3E%3C/g%3E%3Ctext x='207' y='136' fill='%235b6778' font-family='Arial,sans-serif' font-size='20' font-weight='600' letter-spacing='4'%3EISOLANTES%3C/text%3E%3C/svg%3E");
+    background: radial-gradient(circle at 85% 10%, rgb(88 168 223 / 20%), transparent 30%), linear-gradient(145deg, #edf5fb 0%, #f8fafc 55%, #e5f0f8 100%);
+}
+
+body.welcome-anonymous .page-anonymous .glpi-logo {
+    width: 300px;
+    height: 105px;
+    object-fit: contain;
+}
+
+body.welcome-anonymous .main-content-card {
+    border: 1px solid #d7e4f0;
+    border-radius: 18px;
+    box-shadow: 0 18px 55px rgb(0 59 115 / 14%);
+}
+
+body.welcome-anonymous .form-control,
+body.welcome-anonymous .form-select {
+    border-color: #b8ccdd;
+    border-radius: 9px;
+}
+
+body.welcome-anonymous .form-control:focus,
+body.welcome-anonymous .form-select:focus {
+    border-color: #005ca9;
+    box-shadow: 0 0 0 3px rgb(0 92 169 / 14%);
+}
